@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id        Int           @id @default(autoincrement())
+  title     String
+  author    String
+  desc      String
+  userId    Int
+  status    PostStatus?
+  rejectDsc String?
+  user      User          @relation(fields: [userId], references: [id])
+  tags      TagsOnPosts[]
+  media     MediaOnPost[]
+  updatedAt DateTime      @default(now())
+}
+
+model Tag {
+  id         Int           @id @default(autoincrement())
+  name       String
+  posts      TagsOnPosts[]
+  UserOnTags UserOnTags[]
+}
+
+model TagsOnPosts {
+  postId     Int
+  tagId      Int
+  assignedAt DateTime @default(now())
+  assignedBy String
+  post       Post     @relation(fields: [postId], references: [id])
+  tag        Tag      @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+}
+
+model User {
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  username         String            @unique
+  userType         Role
+  blocked          Boolean           @default(false)
+  onboarded        Boolean           @default(false)
+  firebaseUid      String            @unique
+  contact          String
+  emergencyContact EmergencyContact?
+  post             Post[]
+  UserOnTags       UserOnTags[]
+}
+
+model UserOnTags {
+  userId     Int
+  tagId      Int
+  assignedAt DateTime @default(now())
+  tag        Tag      @relation(fields: [tagId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@id([userId, tagId])
+}
+
+model EmergencyContact {
+  id          Int    @id @default(autoincrement())
+  name        String
+  phoneNumber String
+  userId      Int    @unique
+  user        User   @relation(fields: [userId], references: [id])
+}
+
+model MediaOnPost {
+  id           Int     @id @default(autoincrement())
+  isThumbnail  Boolean @default(false)
+  mediaUrl     String
+  postId       Int     
+  post         Post    @relation(fields: [postId], references: [id])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PostStatus {
+  APPROVED
+  REJECTED
+  IN_REVIEW
+}

@@ -1,0 +1,7 @@
+node_modules
+dist
+
+/src/config/service-account*.json
+
+# Script for deleting all firebase users. Should only be used in dev.
+/utils/firebase-util/cleanFirebaseAuth.js

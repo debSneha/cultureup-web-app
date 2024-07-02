@@ -1,0 +1,107 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+
+name: Staging CI/CD
+
+on: [push, pull_request, workflow_dispatch] 
+  
+  # to cancel previous runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_test:
+
+    strategy:
+      matrix:
+        node-version: ${{ fromJSON(github.ref == 'refs/heads/main' && '[18]' || '[16,18]') }}
+
+    runs-on: 'ubuntu-latest'
+
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v3
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: install dependencies 
+      run: npm install
+
+    - name: Build
+      run: npm run build --if-present
+    
+    - name: Run Unit tests
+      run: npm run test
+  
+  deploy_staging: 
+
+    strategy:
+      matrix:
+        node-version: ${{ fromJSON(github.ref == 'refs/heads/main' && '[16,18]' || '[16,18]') }}
+
+    runs-on: 'ubuntu-latest'
+
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v3
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: install dependencies 
+      run: npm install
+
+    - name: Install Doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DO_ACCESS_TOKEN }}
+    
+    - name: Add IP address to trusted source postgres
+      uses: GarreauArthur/manage-digital-ocean-managed-database-trusted-sources-gh-action@main
+      with:
+        action: "add"
+        database_id: ${{ secrets.DATABASE_ID }}
+        digitalocean_token: ${{ secrets.DO_ACCESS_TOKEN }}
+    
+    - name: Install playwright
+      if: ${{ matrix.node-version == '16'}}
+      run: npx playwright install
+      
+    - name: Run e2e tests
+      if: ${{ matrix.node-version == '16'}}
+      run: |
+        touch .env
+        echo VITE_BASE_URL=$VITE_BASE_URL >> .env
+        echo VITE_SALT=$VITE_SALT >> .env
+        npm run test:e2e
+      env: 
+        VITE_BASE_URL: ${{secrets.VITE_BASE_URL}}
+        VITE_SALT: ${{secrets.VITE_SALT}}
+    
+    - name: Remove IP address to trusted source postgres
+      uses: GarreauArthur/manage-digital-ocean-managed-database-trusted-sources-gh-action@main
+      with:
+        action: "remove"
+        database_id: ${{ secrets.DATABASE_ID }}
+        digitalocean_token: ${{ secrets.DO_ACCESS_TOKEN }}
+    
+    - name: Deploy
+      if: ${{ matrix.node-version == '16'}}
+      run: doctl apps create-deployment ${{ secrets.APP_ID }} --wait=true
+  
+  
+    
+
+
+
+
+
+
